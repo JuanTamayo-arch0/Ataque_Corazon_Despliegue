@@ -65,13 +65,15 @@ heart_svg = """
 </svg>
 """
 
+#NOTA: cada línea del bloque va sin indentación. Si se indentan 4+ espacios,
+#Markdown las interpreta como un bloque de código y se ven como texto plano.
 st.markdown(f"""
 <div class="hero">
-    {heart_svg}
-    <div>
-        <h1>Predicción de Riesgo de Ataque de Corazón</h1>
-        <p>Modelo Knn &middot; validación cruzada estratificada &middot; f1-macro &asymp; 0.816</p>
-    </div>
+{heart_svg}
+<div>
+<h1>Predicción de Riesgo de Ataque de Corazón</h1>
+<p>Modelo Knn &middot; validación cruzada estratificada &middot; f1-macro &asymp; 0.816</p>
+</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -137,9 +139,15 @@ predictoras_categoricas_multicat = ['smoking_status']
 #3 o más categorías -> drop_first=False
 data_preparada = pd.get_dummies(data_preparada, columns=predictoras_categoricas_multicat,
                                  drop_first=False, dtype=int)
-#2 categorías -> drop_first=True
-data_preparada = pd.get_dummies(data_preparada, columns=predictoras_categoricas_2cat,
-                                 drop_first=True, dtype=int)
+#2 categorías (drop_first=True en el entrenamiento): con una sola fila, pd.get_dummies
+#NO sirve aquí. Al haber una única categoría presente en la fila, get_dummies genera
+#0 columnas para esa variable, y el reindex de más abajo la rellenaría siempre con 0,
+#sin importar si el usuario marcó "Yes" o "No" (por eso hipertensión/enfermedad
+#cardíaca no cambiaban la predicción). Se recrean a mano las columnas que sobrevivieron
+#al drop_first en el entrenamiento (hypertension_Yes, heart_disease_Yes, ever_married_Yes).
+for col in predictoras_categoricas_2cat:
+    data_preparada[f"{col}_Yes"] = (data_preparada[col] == "Yes").astype(int)
+    data_preparada = data_preparada.drop(columns=[col])
 
 #Se adicionan las columnas faltantes (dummies de categorías que no salieron en este registro)
 data_preparada = data_preparada.reindex(columns=variables, fill_value=0)
@@ -185,23 +193,29 @@ def gauge_chart(valor, titulo="Probabilidad de riesgo"):
     return fig
 
 
-#Tarjeta de resultado (color según el riesgo)
+#Tarjeta de resultado (color según el riesgo). Sin indentación en las líneas HTML
+#(ver nota más arriba sobre Markdown y bloques de código).
 if Y_pred_decodificada[0] == 'Yes':
     st.markdown(f"""
-    <div class="card card-riesgo">
-        <h3>⚠️ Riesgo elevado de ataque de corazón</h3>
-        <p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="card card-riesgo">
+<h3>⚠️ Riesgo elevado de ataque de corazón</h3>
+<p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
+</div>
+""", unsafe_allow_html=True)
 else:
     st.markdown(f"""
-    <div class="card card-normal">
-        <h3>✅ Riesgo bajo de ataque de corazón</h3>
-        <p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="card card-normal">
+<h3>✅ Riesgo bajo de ataque de corazón</h3>
+<p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
+</div>
+""", unsafe_allow_html=True)
 
-st.pyplot(gauge_chart(prob_riesgo))
+#use_container_width=False evita que Streamlit estire la figura al ancho completo
+#de la página (eso era lo que hacía ver la aguja "gigante"). La centramos en una
+#columna angosta para que quede proporcionada.
+_, col_gauge, _ = st.columns([1, 1.2, 1])
+with col_gauge:
+    st.pyplot(gauge_chart(prob_riesgo), use_container_width=False)
 
 #Recomendaciones personalizadas según los factores de riesgo capturados en el formulario
 factores = []
