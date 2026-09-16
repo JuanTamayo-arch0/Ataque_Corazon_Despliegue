@@ -70,6 +70,8 @@ st.markdown("""
 }
 .card-riesgo {background-color: #ffe3e8; border-left: 6px solid #ff4d6d;}
 .card-normal {background-color: #e3f8ec; border-left: 6px solid #2ecc71;}
+.card h3, .card p {color: #1a1a1a;}
+.card b {color: #000000;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -188,22 +190,29 @@ else:
 
 data['Prediccion'] = Y_pred_decodificada
 
-#Gauge (velocímetro) de probabilidad, dibujado con matplotlib
+#Gauge (velocímetro) de probabilidad, dibujado con matplotlib.
+#Fondo transparente y texto claro para que se integre con el tema oscuro de Streamlit
+#(por defecto matplotlib pone fondo blanco sólido y texto negro, que se ve como una
+#"caja" pegada sobre el resto de la app).
 def gauge_chart(valor, titulo="Probabilidad de riesgo"):
     fig, ax = plt.subplots(figsize=(4, 2.6))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor('none')
+
     valores = [0.33, 0.33, 0.34]
     colores = ['#2ecc71', '#f1c40f', '#ff4d6d']
-    ax.pie(valores + [sum(valores)], colors=colores + ['white'],
+    ax.pie(valores + [sum(valores)], colors=colores + ['none'],
            startangle=180, counterclock=False,
-           wedgeprops=dict(width=0.35, edgecolor='white'))
+           wedgeprops=dict(width=0.35, edgecolor='#0e1117'))
 
     angulo = math.radians(180 - valor * 180)
     x, y = 0.65 * math.cos(angulo), 0.65 * math.sin(angulo)
-    ax.plot([0, x], [0, y], color='#2c2c2c', linewidth=3, solid_capstyle='round')
-    ax.add_patch(plt.Circle((0, 0), 0.06, color='#2c2c2c', zorder=5))
+    ax.plot([0, x], [0, y], color='#f2f2f2', linewidth=3, solid_capstyle='round')
+    ax.add_patch(plt.Circle((0, 0), 0.06, color='#f2f2f2', zorder=5))
 
-    ax.text(0, -0.15, f"{valor*100:.1f}%", ha='center', va='center', fontsize=20, fontweight='bold')
-    ax.set_title(titulo, fontsize=12, pad=10)
+    ax.text(0, -0.15, f"{valor*100:.1f}%", ha='center', va='center',
+            fontsize=20, fontweight='bold', color='#f2f2f2')
+    ax.set_title(titulo, fontsize=12, pad=10, color='#f2f2f2')
     ax.set_ylim(-0.2, 1.1)
     ax.set_xlim(-1.1, 1.1)
     ax.set_aspect('equal')
@@ -235,7 +244,7 @@ else:
 #columna angosta para que quede proporcionada.
 _, col_gauge, _ = st.columns([1, 1.2, 1])
 with col_gauge:
-    st.pyplot(gauge_chart(prob_riesgo), use_container_width=False)
+    st.pyplot(gauge_chart(prob_riesgo), use_container_width=False, transparent=True)
 
 #Recomendaciones personalizadas según los factores de riesgo capturados en el formulario
 factores = []
@@ -265,12 +274,21 @@ with st.expander("📊 Ver datos y detalle de la predicción"):
 with st.expander("📈 Comparación de modelos (validación cruzada, f1-macro, 10 folds)"):
     box_colors = {"Tree": "#b0b0b0", "RF": "#b0b0b0", "Knn": "#6a5acd", "NN": "#b0b0b0", "SVM": "#b0b0b0"}
     fig2, ax2 = plt.subplots(figsize=(5, 3.2))
+    fig2.patch.set_alpha(0)
+    ax2.set_facecolor('none')
+
     bp = ax2.boxplot([comparacion_cv[m] for m in comparacion_cv.columns],
-                      tick_labels=list(comparacion_cv.columns), patch_artist=True)
+                      tick_labels=list(comparacion_cv.columns), patch_artist=True,
+                      medianprops=dict(color='#0e1117', linewidth=1.5))
     for patch, modelo_nombre in zip(bp['boxes'], comparacion_cv.columns):
         patch.set_facecolor(box_colors[modelo_nombre])
-    ax2.set_ylabel("f1-macro (test, CV)")
+
+    #Texto, ejes y bordes en claro para que se lea sobre el fondo oscuro de la app
+    ax2.set_ylabel("f1-macro (test, CV)", color='#f2f2f2')
     ax2.set_ylim(0.6, 0.9)
-    st.pyplot(fig2, use_container_width=False)
+    ax2.tick_params(colors='#f2f2f2')
+    for spine in ax2.spines.values():
+        spine.set_color('#f2f2f2')
+    st.pyplot(fig2, use_container_width=False, transparent=True)
     st.caption(f"Knn (modelo elegido): media {knn_media_cv*100:.1f}%, "
                f"desviación estándar {knn_desv_cv*100:.1f}% entre los 10 folds.")
