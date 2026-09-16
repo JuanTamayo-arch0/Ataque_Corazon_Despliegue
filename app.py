@@ -25,6 +25,24 @@ modelo, labelencoder, variables, min_max_scaler = pickle.load(open(filename, 'rb
 #data = pd.read_excel("ataque_corazon-datosFuturos.xlsx")
 #data.head()
 
+#Resultados reales de la validación cruzada (10 folds, f1-macro) de 4_Validacion_Cruzada_Class,
+#para todos los modelos evaluados. Se usan para calcular la confianza (media ± desviación
+#estándar) del modelo elegido (Knn) y para el gráfico de comparación más abajo.
+comparacion_cv = pd.DataFrame({
+    "Tree": [0.721418, 0.690212, 0.681934, 0.700691, 0.701630,
+             0.711428, 0.724050, 0.710332, 0.723362, 0.706346],
+    "RF":   [0.772339, 0.774068, 0.781568, 0.768247, 0.788119,
+             0.793846, 0.740833, 0.802741, 0.805691, 0.762300],
+    "Knn":  [0.817424, 0.797541, 0.803766, 0.821875, 0.821875,
+             0.837646, 0.787018, 0.823767, 0.819954, 0.828694],
+    "NN":   [0.699605, 0.774405, 0.761134, 0.734703, 0.708691,
+             0.737760, 0.701863, 0.748884, 0.768165, 0.742853],
+    "SVM":  [0.701447, 0.717271, 0.721817, 0.723180, 0.723180,
+             0.716796, 0.663375, 0.719336, 0.689386, 0.715691],
+})
+knn_media_cv = comparacion_cv["Knn"].mean()
+knn_desv_cv = comparacion_cv["Knn"].std()
+
 import streamlit as st
 
 st.set_page_config(page_title="Riesgo Cardiovascular", page_icon="🫀", layout="wide")
@@ -72,7 +90,7 @@ st.markdown(f"""
 {heart_svg}
 <div>
 <h1>Predicción de Riesgo de Ataque de Corazón</h1>
-<p>Modelo Knn &middot; validación cruzada estratificada &middot; f1-macro &asymp; 0.816</p>
+<p>Modelo Knn &middot; validación cruzada estratificada (10 folds) &middot; f1-macro {knn_media_cv*100:.1f}% &plusmn; {knn_desv_cv*100:.1f}%</p>
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -200,6 +218,7 @@ if Y_pred_decodificada[0] == 'Yes':
 <div class="card card-riesgo">
 <h3>⚠️ Riesgo elevado de ataque de corazón</h3>
 <p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
+<p>Confianza del modelo (f1-macro, validación cruzada de 10 folds): <b>{knn_media_cv*100:.1f}% &plusmn; {knn_desv_cv*100:.1f}%</b></p>
 </div>
 """, unsafe_allow_html=True)
 else:
@@ -207,6 +226,7 @@ else:
 <div class="card card-normal">
 <h3>✅ Riesgo bajo de ataque de corazón</h3>
 <p>El modelo estima una probabilidad de <b>{prob_riesgo*100:.1f}%</b> para este perfil.</p>
+<p>Confianza del modelo (f1-macro, validación cruzada de 10 folds): <b>{knn_media_cv*100:.1f}% &plusmn; {knn_desv_cv*100:.1f}%</b></p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -239,16 +259,18 @@ else:
 with st.expander("📊 Ver datos y detalle de la predicción"):
     st.dataframe(data)
 
-#Comparación de modelos evaluados en la validación cruzada (por qué se eligió Knn)
-with st.expander("📈 Comparación de modelos (validación cruzada, f1-macro)"):
-    comparacion = pd.DataFrame({
-        "Modelo": ["Tree", "RF", "Knn (seleccionado)", "NN", "SVM"],
-        "f1_macro_test": [0.707, 0.779, 0.816, 0.738, 0.709]
-    })
-    fig2, ax2 = plt.subplots(figsize=(5, 3))
-    colores_barra = ['#b0b0b0', '#b0b0b0', '#6a5acd', '#b0b0b0', '#b0b0b0']
-    ax2.bar(comparacion["Modelo"], comparacion["f1_macro_test"], color=colores_barra)
+#Comparación de modelos evaluados en la validación cruzada (10 folds reales, f1-macro)
+#El boxplot muestra la variabilidad entre folds, no solo el promedio: así se ve la
+#confianza real del modelo elegido (Knn) frente a las alternativas.
+with st.expander("📈 Comparación de modelos (validación cruzada, f1-macro, 10 folds)"):
+    box_colors = {"Tree": "#b0b0b0", "RF": "#b0b0b0", "Knn": "#6a5acd", "NN": "#b0b0b0", "SVM": "#b0b0b0"}
+    fig2, ax2 = plt.subplots(figsize=(5, 3.2))
+    bp = ax2.boxplot([comparacion_cv[m] for m in comparacion_cv.columns],
+                      tick_labels=list(comparacion_cv.columns), patch_artist=True)
+    for patch, modelo_nombre in zip(bp['boxes'], comparacion_cv.columns):
+        patch.set_facecolor(box_colors[modelo_nombre])
     ax2.set_ylabel("f1-macro (test, CV)")
-    ax2.set_ylim(0, 1)
-    plt.xticks(rotation=15)
-    st.pyplot(fig2)
+    ax2.set_ylim(0.6, 0.9)
+    st.pyplot(fig2, use_container_width=False)
+    st.caption(f"Knn (modelo elegido): media {knn_media_cv*100:.1f}%, "
+               f"desviación estándar {knn_desv_cv*100:.1f}% entre los 10 folds.")
